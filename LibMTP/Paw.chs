@@ -64,19 +64,17 @@ cFromRawDevice ptr = DeviceEntry
       <*> return (DeviceEntryHandle ptr)
 
 detectRawDevices :: IO (Either LibmtpErrorNumber [DeviceEntry])
-detectRawDevices = do
-    p <- mallocForeignPtr
-    r <- mallocForeignPtr
-    withForeignPtr p $ \p' -> do
-      withForeignPtr r $ \r' -> do
-        err <- toEnum . fromIntegral <$> {#call LIBMTP_Detect_Raw_Devices as ^ #} p' r'
-        case err of
-          LibmtpErrorNone -> do
-            cnt <- fromIntegral <$> peek r'
-            p'' <- peek p'
-            l <- forM [0..cnt-1] $ \i -> cFromRawDevice $ p'' `plusPtr` (i*{#sizeof LIBMTP_raw_device_t#})
-            return (Right l)
-          _ -> return (Left err)
+detectRawDevices =
+  alloca $ \p ->
+  alloca $ \r -> do
+    err <- toEnum . fromIntegral <$> {#call LIBMTP_Detect_Raw_Devices as ^ #} p r
+    case err of
+      LibmtpErrorNone -> do
+        cnt <- fromIntegral <$> peek r
+        p' <- peek p
+        l <- forM [0..cnt-1] $ \i -> cFromRawDevice $ p' `plusPtr` (i*{#sizeof LIBMTP_raw_device_t#})
+        return (Right l)
+      _ -> return (Left err)
 
 openRawDevice :: DeviceEntry -> IO DeviceHandle
 openRawDevice = {#call LIBMTP_Open_Raw_Device as ^ #} . unDEH . deHandle
